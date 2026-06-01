@@ -143,6 +143,13 @@
         margin-top: 18px;
       }
 
+      .helper-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 4px;
+      }
+
       button {
         min-height: 42px;
         border: 1px solid var(--line);
@@ -264,6 +271,26 @@
         font: 0.92rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       }
 
+      .suggestions {
+        display: grid;
+        gap: 8px;
+      }
+
+      .suggestion {
+        display: grid;
+        gap: 2px;
+        width: 100%;
+        min-height: auto;
+        padding: 9px 10px;
+        text-align: left;
+      }
+
+      .suggestion span {
+        color: var(--muted);
+        font-size: 0.86rem;
+        font-weight: 500;
+      }
+
       @media (max-width: 840px) {
         header,
         .layout {
@@ -313,13 +340,15 @@
           <div class="panel-inner">
             <div class="form-grid">
               <label class="span-2">
-                PC機種名
-                <input id="machineName" autocomplete="off" placeholder="例: ThinkCentre M75q Gen 5" />
+                PC機種名 / 商品名
+                <input id="machineName" autocomplete="off" placeholder="例: ThinkCentre M75q Gen 5 Ryzen 5 8500GE" />
+                <span class="small">機種名だけでも検索できます。販売ページの商品名を貼ると精度が上がります。</span>
               </label>
 
               <label>
                 CPU型番
-                <input id="cpuName" autocomplete="off" placeholder="例: Ryzen 5 8500GE" />
+                <input id="cpuName" list="cpuOptions" autocomplete="off" placeholder="例: Ryzen 5 8500GE" />
+                <datalist id="cpuOptions"></datalist>
               </label>
 
               <label>
@@ -381,6 +410,7 @@
 
             <div class="actions">
               <button class="primary" type="submit">判定する</button>
+              <button type="button" id="lookupMachine">機種からCPUを探す</button>
               <button type="button" id="copyResult">判定結果をコピー</button>
             </div>
           </div>
@@ -390,8 +420,9 @@
           <div class="panel-inner result">
             <div class="status" id="status">
               <strong>入力後に判定します</strong>
-              <p>CPU MarkはPassMarkのCPU ListでCPU型番を検索して確認してください。</p>
+              <p>CPU型番を入力するとCPU Markを自動入力します。機種名からの検索もできます。</p>
             </div>
+            <div class="suggestions" id="suggestions"></div>
             <div class="checks" id="checks"></div>
             <textarea class="copy-box" id="summary" readonly>判定結果がここに表示されます。</textarea>
           </div>
@@ -429,6 +460,14 @@
       const checksBox = document.querySelector("#checks");
       const summaryBox = document.querySelector("#summary");
       const copyButton = document.querySelector("#copyResult");
+      const lookupMachineButton = document.querySelector("#lookupMachine");
+      const cpuOptions = document.querySelector("#cpuOptions");
+      const suggestionsBox = document.querySelector("#suggestions");
+      const cpuInput = document.querySelector("#cpuName");
+      const cpuMarkInput = document.querySelector("#cpuMark");
+      const machineInput = document.querySelector("#machineName");
+      let cpuData = [];
+      let normalizedCpuData = [];
 
       function value(id) {
         return document.querySelector(id).value.trim();
@@ -447,6 +486,116 @@
         item.className = "check";
         item.innerHTML = '<span class="mark ' + kind + '">' + (kind === "ok" ? "✓" : kind === "warn" ? "!" : "×") + '</span><div><b>' + text + '</b><p class="small">' + detail + "</p></div>";
         return item;
+      }
+
+      function normalize(text) {
+        return String(text || "")
+          .toLowerCase()
+          .replace(/®|™|\(r\)|\(tm\)/g, "")
+          .replace(/[^a-z0-9]+/g, " ")
+          .replace(/\b(cpu|processor|with|amd|intel|core|ryzen)\b/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      function compact(text) {
+        return normalize(text).replace(/\s+/g, "");
+      }
+
+      function findCpu(query) {
+        const normalized = compact(query);
+        if (!normalized) return null;
+        return normalizedCpuData.find((cpu) => cpu.compact === normalized)
+          || normalizedCpuData.find((cpu) => cpu.compact.includes(normalized))
+          || normalizedCpuData.find((cpu) => normalized.includes(cpu.compact) && cpu.compact.length >= 5)
+          || null;
+      }
+
+      function showSuggestions(items, source) {
+        suggestionsBox.innerHTML = "";
+        if (!items.length) return;
+        const title = document.createElement("p");
+        title.className = "small";
+        title.textContent = source;
+        suggestionsBox.append(title);
+        items.slice(0, 5).forEach((cpu) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "suggestion";
+          button.innerHTML = "<b>" + cpu.name + "</b><span>CPU Mark " + cpu.mark.toLocaleString() + "</span>";
+          button.addEventListener("click", () => applyCpu(cpu));
+          suggestionsBox.append(button);
+        });
+      }
+
+      function applyCpu(cpu) {
+        if (!cpu) return;
+        cpuInput.value = cpu.name;
+        cpuMarkInput.value = cpu.mark;
+        evaluate();
+      }
+
+      function suggestFromText(text, limit = 5) {
+        const normalizedText = compact(text);
+        if (!normalizedText) return [];
+        const matches = normalizedCpuData
+          .filter((cpu) => cpu.compact.length >= 5 && normalizedText.includes(cpu.compact))
+          .sort((a, b) => b.compact.length - a.compact.length || b.mark - a.mark);
+        const seen = new Set();
+        return matches.filter((cpu) => {
+          if (seen.has(cpu.name)) return false;
+          seen.add(cpu.name);
+          return true;
+        }).slice(0, limit);
+      }
+
+      async function loadCpuData() {
+        try {
+          const response = await fetch("cpu-data.json", { cache: "force-cache" });
+          const data = await response.json();
+          cpuData = data.cpus || [];
+          normalizedCpuData = cpuData.map((cpu) => ({ ...cpu, compact: compact(cpu.name) }));
+          cpuOptions.innerHTML = cpuData.slice(0, 1500).map((cpu) => '<option value="' + cpu.name.replace(/"/g, "&quot;") + '">').join("");
+          const cpu = findCpu(cpuInput.value);
+          if (cpu) applyCpu(cpu);
+        } catch (error) {
+          suggestionsBox.innerHTML = '<p class="small">CPUデータを読み込めませんでした。ページを再読み込みしてください。</p>';
+        }
+      }
+
+      async function lookupMachine() {
+        const query = value("#machineName");
+        if (!query) return;
+        lookupMachineButton.textContent = "検索中";
+        lookupMachineButton.disabled = true;
+        suggestionsBox.innerHTML = '<p class="small">機種名からCPU候補を検索しています。</p>';
+
+        const directMatches = suggestFromText(query);
+        if (directMatches.length) {
+          applyCpu(directMatches[0]);
+          showSuggestions(directMatches, "入力内容から見つかったCPU候補");
+          lookupMachineButton.textContent = "機種からCPUを探す";
+          lookupMachineButton.disabled = false;
+          return;
+        }
+
+        try {
+          const searchUrl = "https://r.jina.ai/http://r.jina.ai/http://https://duckduckgo.com/html/?q=" + encodeURIComponent(query + " CPU processor specifications");
+          const response = await fetch(searchUrl);
+          const text = await response.text();
+          const matches = suggestFromText(text);
+          if (matches.length) {
+            applyCpu(matches[0]);
+            showSuggestions(matches, "Web検索結果から見つかったCPU候補");
+          } else {
+            suggestionsBox.innerHTML = '<p class="small">CPU候補を特定できませんでした。販売ページの商品名やCPU表記を含めて貼ると判定できます。</p>';
+          }
+        } catch (error) {
+          suggestionsBox.innerHTML = '<p class="small">Web検索に失敗しました。CPU型番または販売ページの商品名を入力してください。</p>';
+        } finally {
+          lookupMachineButton.textContent = "機種からCPUを探す";
+          lookupMachineButton.disabled = false;
+        }
       }
 
       function evaluate(event) {
@@ -519,6 +668,22 @@
       }
 
       form.addEventListener("submit", evaluate);
+      cpuInput.addEventListener("input", () => {
+        const cpu = findCpu(cpuInput.value);
+        if (cpu) {
+          cpuMarkInput.value = cpu.mark;
+          showSuggestions([cpu], "CPU型番からCPU Markを自動入力しました");
+        }
+        evaluate();
+      });
+      machineInput.addEventListener("input", () => {
+        const matches = suggestFromText(machineInput.value);
+        if (matches.length) {
+          applyCpu(matches[0]);
+          showSuggestions(matches, "入力内容から見つかったCPU候補");
+        }
+      });
+      lookupMachineButton.addEventListener("click", lookupMachine);
       copyButton.addEventListener("click", async () => {
         await navigator.clipboard.writeText(summaryBox.value);
         copyButton.textContent = "コピーしました";
@@ -527,6 +692,7 @@
         }, 1500);
       });
 
+      loadCpuData();
       evaluate();
     </script>
   </body>
