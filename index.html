@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI秘書システム PCスペック判定</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f7f9;
+        --panel: #ffffff;
+        --ink: #17202a;
+        --muted: #5e6b78;
+        --line: #d9dee5;
+        --ok: #13795b;
+        --warn: #a65f00;
+        --bad: #b42318;
+        --accent: #1f6feb;
+        --soft: #eef4ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        line-height: 1.55;
+      }
+
+      main {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 32px 0 48px;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 20px;
+        margin-bottom: 24px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: clamp(1.6rem, 3vw, 2.4rem);
+        line-height: 1.15;
+        letter-spacing: 0;
+      }
+
+      .lead {
+        max-width: 760px;
+        margin-top: 10px;
+        color: var(--muted);
+      }
+
+      .benchmark-link {
+        display: inline-flex;
+        align-items: center;
+        min-height: 42px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--accent);
+        font-weight: 700;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+        gap: 18px;
+        align-items: start;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+
+      .panel-inner {
+        padding: 20px;
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 0.92rem;
+        font-weight: 700;
+      }
+
+      input,
+      select {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--ink);
+        font: inherit;
+        padding: 8px 10px;
+      }
+
+      input:focus,
+      select:focus {
+        border-color: var(--accent);
+        outline: 3px solid rgba(31, 111, 235, 0.16);
+      }
+
+      .span-2 {
+        grid-column: span 2;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      button {
+        min-height: 42px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--ink);
+        cursor: pointer;
+        font: inherit;
+        font-weight: 700;
+        padding: 0 14px;
+      }
+
+      button.primary {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: #fff;
+      }
+
+      .result {
+        display: grid;
+        gap: 14px;
+      }
+
+      .status {
+        border-radius: 8px;
+        padding: 16px;
+        background: var(--soft);
+      }
+
+      .status strong {
+        display: block;
+        font-size: 1.35rem;
+        line-height: 1.2;
+        margin-bottom: 6px;
+      }
+
+      .status.ok {
+        background: #eaf7f1;
+        color: var(--ok);
+      }
+
+      .status.warn {
+        background: #fff5e6;
+        color: var(--warn);
+      }
+
+      .status.bad {
+        background: #fff0ee;
+        color: var(--bad);
+      }
+
+      .checks {
+        display: grid;
+        gap: 10px;
+      }
+
+      .check {
+        display: grid;
+        grid-template-columns: 24px 1fr;
+        gap: 10px;
+        align-items: start;
+        border-top: 1px solid var(--line);
+        padding-top: 10px;
+      }
+
+      .mark {
+        display: inline-grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        color: #fff;
+        font-size: 0.86rem;
+        font-weight: 900;
+      }
+
+      .mark.ok {
+        background: var(--ok);
+      }
+
+      .mark.warn {
+        background: var(--warn);
+      }
+
+      .mark.bad {
+        background: var(--bad);
+      }
+
+      .small {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .specs {
+        display: grid;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .spec-row {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 10px;
+        border-top: 1px solid var(--line);
+        padding-top: 12px;
+      }
+
+      .spec-row b {
+        color: var(--muted);
+      }
+
+      .copy-box {
+        width: 100%;
+        min-height: 150px;
+        resize: vertical;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 10px;
+        font: 0.92rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      @media (max-width: 840px) {
+        header,
+        .layout {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+
+        .benchmark-link {
+          justify-content: center;
+          width: 100%;
+        }
+      }
+
+      @media (max-width: 620px) {
+        main {
+          width: min(100% - 20px, 1120px);
+          padding-top: 20px;
+        }
+
+        .form-grid,
+        .spec-row {
+          grid-template-columns: 1fr;
+        }
+
+        .span-2 {
+          grid-column: span 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>AI秘書システム PCスペック判定</h1>
+          <p class="lead">
+            購入候補PCのCPU Mark、メモリ、ストレージを入力すると、最低スペックと推奨スペックを満たすか判定します。
+          </p>
+        </div>
+        <a class="benchmark-link" href="https://www.cpubenchmark.net/cpu_list.php" target="_blank" rel="noreferrer">
+          CPU Markを確認
+        </a>
+      </header>
+
+      <section class="layout">
+        <form class="panel" id="checker">
+          <div class="panel-inner">
+            <div class="form-grid">
+              <label class="span-2">
+                PC機種名
+                <input id="machineName" autocomplete="off" placeholder="例: ThinkCentre M75q Gen 5" />
+              </label>
+
+              <label>
+                CPU型番
+                <input id="cpuName" autocomplete="off" placeholder="例: Ryzen 5 8500GE" />
+              </label>
+
+              <label>
+                CPU Mark
+                <input id="cpuMark" inputmode="numeric" type="number" min="0" step="1" placeholder="例: 22000" required />
+              </label>
+
+              <label>
+                メモリ
+                <select id="memoryGb">
+                  <option value="8">8GB</option>
+                  <option value="16">16GB</option>
+                  <option value="24">24GB</option>
+                  <option value="32" selected>32GB</option>
+                  <option value="48">48GB</option>
+                  <option value="64">64GB</option>
+                  <option value="96">96GB</option>
+                  <option value="128">128GB</option>
+                </select>
+              </label>
+
+              <label>
+                ストレージ容量
+                <select id="storageGb">
+                  <option value="256">256GB</option>
+                  <option value="512">512GB</option>
+                  <option value="1000" selected>1TB</option>
+                  <option value="2000">2TB</option>
+                  <option value="4000">4TB</option>
+                </select>
+              </label>
+
+              <label>
+                ストレージ種類
+                <select id="storageType">
+                  <option value="nvme" selected>NVMe SSD</option>
+                  <option value="sata">SATA SSD</option>
+                  <option value="hdd">HDD</option>
+                </select>
+              </label>
+
+              <label>
+                有線LAN
+                <select id="wiredLan">
+                  <option value="yes" selected>あり</option>
+                  <option value="no">なし / 不明</option>
+                </select>
+              </label>
+
+              <label class="span-2">
+                OS
+                <select id="os">
+                  <option value="ok" selected>Windows 11 Pro / Ubuntu LTS</option>
+                  <option value="home">Windows 11 Home</option>
+                  <option value="unknown">不明</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="actions">
+              <button class="primary" type="submit">判定する</button>
+              <button type="button" id="copyResult">判定結果をコピー</button>
+            </div>
+          </div>
+        </form>
+
+        <aside class="panel">
+          <div class="panel-inner result">
+            <div class="status" id="status">
+              <strong>入力後に判定します</strong>
+              <p>CPU MarkはPassMarkのCPU ListでCPU型番を検索して確認してください。</p>
+            </div>
+            <div class="checks" id="checks"></div>
+            <textarea class="copy-box" id="summary" readonly>判定結果がここに表示されます。</textarea>
+          </div>
+        </aside>
+      </section>
+
+      <section class="panel specs">
+        <div class="panel-inner">
+          <h2>判定基準</h2>
+          <div class="spec-row">
+            <b>最低</b>
+            <p>CPU Mark 10,000以上 / メモリ16GB以上 / NVMe SSD 512GB以上。動作可能だが長期運用では余裕が少ない構成。</p>
+          </div>
+          <div class="spec-row">
+            <b>推奨</b>
+            <p>CPU Mark 18,000以上 / メモリ32GB以上 / NVMe SSD 1TB以上。AI秘書プロセス、ブラウザ自動操作、連携ツール、ログ保存の常時稼働向け。</p>
+          </div>
+          <div class="spec-row">
+            <b>余裕あり</b>
+            <p>CPU Mark 25,000以上 / メモリ64GB以上 / NVMe SSD 2TB以上。複数ユーザー、多数の連携、画像・動画系処理まで見込む構成。</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const levels = {
+        minimum: { label: "最低スペック", cpu: 10000, memory: 16, storage: 512 },
+        recommended: { label: "推奨スペック", cpu: 18000, memory: 32, storage: 1000 },
+        comfortable: { label: "余裕あり", cpu: 25000, memory: 64, storage: 2000 },
+      };
+
+      const form = document.querySelector("#checker");
+      const statusBox = document.querySelector("#status");
+      const checksBox = document.querySelector("#checks");
+      const summaryBox = document.querySelector("#summary");
+      const copyButton = document.querySelector("#copyResult");
+
+      function value(id) {
+        return document.querySelector(id).value.trim();
+      }
+
+      function numberValue(id) {
+        return Number(value(id) || 0);
+      }
+
+      function storageLabel(gb) {
+        return gb >= 1000 ? gb / 1000 + "TB" : gb + "GB";
+      }
+
+      function makeCheck(kind, text, detail) {
+        const item = document.createElement("div");
+        item.className = "check";
+        item.innerHTML = '<span class="mark ' + kind + '">' + (kind === "ok" ? "✓" : kind === "warn" ? "!" : "×") + '</span><div><b>' + text + '</b><p class="small">' + detail + "</p></div>";
+        return item;
+      }
+
+      function evaluate(event) {
+        if (event) event.preventDefault();
+
+        const machine = value("#machineName") || "未入力";
+        const cpuName = value("#cpuName") || "未入力";
+        const cpuMark = numberValue("#cpuMark");
+        const memory = numberValue("#memoryGb");
+        const storage = numberValue("#storageGb");
+        const storageType = value("#storageType");
+        const wiredLan = value("#wiredLan");
+        const os = value("#os");
+
+        const nvmeOk = storageType === "nvme";
+        const minimumOk = cpuMark >= levels.minimum.cpu && memory >= levels.minimum.memory && storage >= levels.minimum.storage && nvmeOk;
+        const recommendedOk = cpuMark >= levels.recommended.cpu && memory >= levels.recommended.memory && storage >= levels.recommended.storage && nvmeOk;
+        const comfortableOk = cpuMark >= levels.comfortable.cpu && memory >= levels.comfortable.memory && storage >= levels.comfortable.storage && nvmeOk;
+
+        let status = {
+          className: "bad",
+          title: "最低スペック未満",
+          body: "AI秘書システムの常時稼働用PCとしては推奨できません。",
+        };
+
+        if (comfortableOk) {
+          status = {
+            className: "ok",
+            title: "余裕あり",
+            body: "複数ユーザー対応や多数の連携まで見込みやすい構成です。",
+          };
+        } else if (recommendedOk) {
+          status = {
+            className: "ok",
+            title: "推奨スペックを満たしています",
+            body: "AI秘書システムの常時稼働用PCとして適した構成です。",
+          };
+        } else if (minimumOk) {
+          status = {
+            className: "warn",
+            title: "最低スペックは満たしています",
+            body: "動作可能ですが、長期運用では推奨スペック以上をおすすめします。",
+          };
+        }
+
+        statusBox.className = "status " + status.className;
+        statusBox.innerHTML = "<strong>" + status.title + "</strong><p>" + status.body + "</p>";
+
+        checksBox.innerHTML = "";
+        checksBox.append(
+          makeCheck(cpuMark >= levels.recommended.cpu ? "ok" : cpuMark >= levels.minimum.cpu ? "warn" : "bad", "CPU Mark: " + cpuMark.toLocaleString(), "最低10,000以上、推奨18,000以上、余裕あり25,000以上"),
+          makeCheck(memory >= levels.recommended.memory ? "ok" : memory >= levels.minimum.memory ? "warn" : "bad", "メモリ: " + memory + "GB", "最低16GB以上、推奨32GB以上、余裕あり64GB以上"),
+          makeCheck(storage >= levels.recommended.storage && nvmeOk ? "ok" : storage >= levels.minimum.storage && nvmeOk ? "warn" : "bad", "ストレージ: " + storageLabel(storage) + " / " + document.querySelector("#storageType option:checked").textContent, "最低NVMe SSD 512GB以上、推奨NVMe SSD 1TB以上"),
+          makeCheck(wiredLan === "yes" ? "ok" : "warn", "有線LAN: " + (wiredLan === "yes" ? "あり" : "なし / 不明"), "常時稼働では有線LAN推奨"),
+          makeCheck(os === "ok" ? "ok" : "warn", "OS: " + document.querySelector("#os option:checked").textContent, "Windows 11 Pro または Ubuntu LTS 推奨"),
+        );
+
+        summaryBox.value = [
+          "AI秘書システム PCスペック判定",
+          "機種: " + machine,
+          "CPU: " + cpuName,
+          "CPU Mark: " + cpuMark.toLocaleString(),
+          "メモリ: " + memory + "GB",
+          "ストレージ: " + storageLabel(storage) + " / " + document.querySelector("#storageType option:checked").textContent,
+          "有線LAN: " + (wiredLan === "yes" ? "あり" : "なし / 不明"),
+          "OS: " + document.querySelector("#os option:checked").textContent,
+          "判定: " + status.title,
+          "CPU Mark確認URL: https://www.cpubenchmark.net/cpu_list.php",
+        ].join("\n");
+      }
+
+      form.addEventListener("submit", evaluate);
+      copyButton.addEventListener("click", async () => {
+        await navigator.clipboard.writeText(summaryBox.value);
+        copyButton.textContent = "コピーしました";
+        window.setTimeout(() => {
+          copyButton.textContent = "判定結果をコピー";
+        }, 1500);
+      });
+
+      evaluate();
+    </script>
+  </body>
+</html>
